@@ -1,0 +1,198 @@
+shopt -s xpg_echo #so that bash's echo understands \c escape sequence
+#!/bin/sh
+
+USAGE=' badcut2 [-d delimiter] [-f from] [-t to] [-s] [file]..'
+# Setting default values for given commandline arguments
+delimiter=$'\t' #tab character
+frnumber=0; # first field
+tonumber=100; # final field
+s_exists=1 # 1 indicates -s not given, 5 indicates otherwise
+
+# Read Command-Line Arguments using getopts 
+# until it reaches a non-Flag argument
+
+while getopts :f:t:d:s option
+do 
+  case "$option" 
+  in
+     d) delimiter=$OPTARG # set delimiter value
+        ;;
+
+     f) frnumber=$OPTARG # set frnumber value
+        frnumber=`expr $frnumber - 1`
+        ;;
+    
+     t) tonumber=$OPTARG # set tonumber value
+        tonumber=`expr $tonumber - 1`
+        ;;
+
+     :) echo " $OPTARG doesn't have a value "
+        echo $USAGE
+        exit 1
+        ;;    # for arguments without value     
+      
+     s) s_exists=5;; # to indicate -s command was given 
+
+     \?) echo "Invalid Arguments!"
+         echo " $OPTARG is not a valid flag"
+         echo $USAGE
+         exit 1
+         ;; 
+  esac
+done
+
+#set IFS according to given delimiter
+IFS=$delimiter
+
+# To test if frnumber > tonumber, if it is
+# exit normally without printing anything
+diffnumber=`expr $tonumber - $frnumber`
+if [ $diffnumber -lt 0 ]; then
+   exit 0
+fi
+
+if [ $frnumber -le -1 ] && [ $tonumber -le -1 ]; then
+   exit 0
+fi
+
+# StartHere is a variable for running 
+# command line arguments after the commands
+# before the files are given
+
+(( StartHere = OPTIND -1)) # Set StartHere value
+shift $StartHere #shift the command line arguments for execution
+
+case $# in
+ [!0]) 
+   # If there are arguments left, read them.
+   # and execute badcut2 on each of them. 
+   while [ $# -gt 0 ] 
+   do 
+      #check if argument is a file, 
+      if [ -e $1 ]
+      then     
+         # It is a file, execute badcut2 function on file
+         while read line
+         do
+            
+            # if -s command was given
+            # append lines with delimiter only
+            if [ $s_exists = 5 ]; then # 
+                if [[ "$line" == *${delimiter}* ]] 
+                   then
+                   echo "$line" >> new_file1               
+                fi
+ 
+            # if -s command was not given
+            # append all lines
+            else 
+                echo "$line" >> new_file1
+            fi
+         done < "$1"
+
+        i=0 # used in testing conditions during iterations
+        lenlines=0 # to count number of fields in each line
+
+        while read line2
+        do
+           # Count number of fields in line
+           for y in $line2; do
+              lenlines=`expr $lenlines + 1`
+           done       
+        
+           # Deduct 1 from number of fields 
+           # since index starts from 0
+           lenlines=`expr $lenlines - 1` 
+           
+           # echo the required fields out to stdout
+           for x in $line2; do
+              if [ $i -eq $lenlines ]; then
+                 if [ $i -le $tonumber ]; then
+                    echo "$x\c"
+                 fi
+                 echo "\n\c"
+              elif [ $i -lt $frnumber ] || [ $i -gt $tonumber ]; then
+                 i=`expr $i + 1`
+                 continue
+              else
+                 echo "$x\c" $delimiter
+              fi
+              i=`expr $i + 1`
+           done
+       # reset values for next line
+       i=0
+       lenlines=0
+       done < new_file1
+       rm new_file1
+
+      # If invalid file given, exit with error
+      else
+         echo "ERROR! File \"$1\" Does Not Exist!"
+         echo $USAGE
+         exit 1 
+      fi
+   shift
+   done
+   exit 0 # Exit success without reading from input
+   ;;
+
+ [0])
+   # If there are no arguments left, read from stdin
+   # and execute badcut on stdin
+   
+   # while the user hasn't hit ctrl+d
+   while read line
+     do
+     touch new_file1 # make a new file to store input
+     # if -s command was given
+     # append lines with delimiter only
+     if [ $s_exists = 5 ]; then # 
+        if [[ "$line" == *${delimiter}* ]] 
+          then
+          echo "$line" >> new_file1               
+        fi
+ 
+     # if -s command was not given
+     # append all lines
+     else 
+                echo "$line" >> new_file1
+            fi
+
+     i=0 # used in testing conditions during iterations
+     lenlines=0 # to count number of fields in each line
+     while read line2
+       do
+       # Count number of fields in line
+       for y in $line2; do
+         lenlines=`expr $lenlines + 1`
+       done       
+        
+       # Deduct 1 from number of fields 
+       # since index starts from 0
+       lenlines=`expr $lenlines - 1` 
+           
+       # echo the required fields out to stdout
+         for x in $line2; do
+           if [ $i -eq $lenlines ]; then
+             if [ $i -le $tonumber ]; then
+               echo "$x\c"
+             fi
+           echo "\n\c"
+           elif [ $i -lt $frnumber ] || [ $i -gt $tonumber ]; then
+           i=`expr $i + 1`
+             continue
+           else
+             echo "$x\c" $delimiter
+           fi
+         i=`expr $i + 1`
+         done
+
+       # reset values for next line
+       i=0
+       lenlines=0
+     done < new_file1
+     rm new_file1 # remove the file for next input
+   done < /dev/stdin
+       rm new_file1 #remove the file for next input
+exit 0
+esac
